@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Ali Parlakçı Kalori Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; padding-top: env(safe-area-inset-top); }
+        .card { background: white; border-radius: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; overflow: hidden; }
+        .stat-card { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; }
+        .delete-btn { color: #ef4444; background: #fee2e2; border-radius: 10px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-md mx-auto space-y-5">
+        <div class="card p-6 text-center border-b-4 border-emerald-500">
+            <h1 class="text-2xl font-black tracking-tight text-slate-800 uppercase">ALİ PARLAKÇI</h1>
+            <p class="text-[10px] font-bold text-slate-400 tracking-[0.2em] uppercase mt-1">Kalori & Form Takibi</p>
+        </div>
+
+        <div class="flex gap-3">
+            <div class="card flex-1 p-3 flex flex-col items-center justify-center">
+                <input type="date" id="datePicker" onchange="changeDate()" class="bg-transparent border-none text-xs font-bold text-emerald-600 outline-none">
+            </div>
+            <div class="card flex-1 p-3 flex items-center justify-center gap-2">
+                <span class="text-[10px] font-black text-slate-400 uppercase">KİLO:</span>
+                <input type="number" id="dailyWeight" oninput="saveWeight()" placeholder="00.0" step="0.1" class="w-16 font-black text-lg text-emerald-600 outline-none bg-transparent">
+            </div>
+        </div>
+
+        <div class="card p-5 bg-slate-800 text-white">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Son 7 Gün Ortalaması</span>
+                <span id="weeklyAvg" class="text-lg font-black text-emerald-400">0</span>
+            </div>
+            <div class="w-full bg-slate-700 h-2 rounded-full overflow-hidden">
+                <div id="weeklyBar" class="bg-emerald-500 h-full w-0 transition-all duration-1000"></div>
+            </div>
+            <p class="text-[9px] text-slate-400 mt-2 italic">* Hedef: Haftalık ortalama 1800 kcal</p>
+        </div>
+
+        <div class="card p-8 text-center border-t-8 border-emerald-500">
+            <div id="kcalValue" class="text-7xl font-black text-slate-800">1800</div>
+            <p class="text-[10px] font-bold text-slate-400 tracking-[0.4em] mb-8 uppercase">KALAN KALORİ</p>
+            
+            <div class="space-y-3">
+                <div class="flex gap-2">
+                    <input type="text" id="foodName" placeholder="Besin adı..." class="flex-1 bg-slate-50 border-none p-4 rounded-2xl text-sm font-semibold">
+                    <input type="number" id="foodKcal" placeholder="kcal" class="w-24 bg-slate-50 border-none p-4 rounded-2xl text-sm font-semibold text-center">
+                </div>
+                <button onclick="addEntry('food')" class="w-full bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all uppercase tracking-widest text-sm">EKLE</button>
+            </div>
+        </div>
+
+        <div class="card p-6 border-l-8 border-orange-500">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aktivite / Spor</h3>
+                <span id="totalBurned" class="text-orange-500 font-black text-sm">0 kcal yandı</span>
+            </div>
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="sportName" placeholder="Egzersiz..." class="flex-1 bg-slate-50 border-none p-3 rounded-xl text-xs font-semibold">
+                <input type="number" id="sportKcal" placeholder="kcal" class="w-20 bg-slate-50 border-none p-3 rounded-xl text-xs font-semibold text-center">
+                <button onclick="addEntry('sport')" class="bg-orange-500 text-white px-4 rounded-xl font-black">+</button>
+            </div>
+            <div id="sportList" class="space-y-2"></div>
+        </div>
+
+        <div class="card p-6">
+            <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Bugün Ne Yedik?</h3>
+            <div id="foodList" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <script>
+        const DAILY_GOAL = 1800;
+        let currentDayKey = new Date().toLocaleDateString('tr-TR');
+        let db = JSON.parse(localStorage.getItem('ali_tracker_db')) || { logs: {} };
+
+        function init() {
+            document.getElementById('datePicker').valueAsDate = new Date();
+            checkDay();
+            updateDisplay();
+        }
+
+        function checkDay() {
+            if(!db.logs[currentDayKey]) {
+                db.logs[currentDayKey] = { weight: "", food: [], sport: [] };
+            }
+        }
+
+        function changeDate() {
+            const picker = document.getElementById('datePicker').value;
+            currentDayKey = new Date(picker).toLocaleDateString('tr-TR');
+            checkDay();
+            updateDisplay();
+        }
+
+        function saveWeight() {
+            db.logs[currentDayKey].weight = document.getElementById('dailyWeight').value;
+            save();
+        }
+
+        function addEntry(type) {
+            const name = document.getElementById(type + 'Name');
+            const kcal = document.getElementById(type + 'Kcal');
+            if(!name.value || !kcal.value) return;
+
+            db.logs[currentDayKey][type].push({
+                id: Date.now(),
+                name: name.value,
+                kcal: parseInt(kcal.value)
+            });
+
+            name.value = ''; kcal.value = '';
+            save();
+            updateDisplay();
+        }
+
+        function deleteEntry(type, id) {
+            if(confirm("Silinsin mi?")) {
+                db.logs[currentDayKey][type] = db.logs[currentDayKey][type].filter(i => i.id !== id);
+                save();
+                updateDisplay();
+            }
+        }
+
+        function updateDisplay() {
+            const log = db.logs[currentDayKey];
+            document.getElementById('dailyWeight').value = log.weight || "";
+            
+            // Günlük Hesaplama
+            const eaten = log.food.reduce((acc, curr) => acc + curr.kcal, 0);
+            const burned = log.sport.reduce((acc, curr) => acc + curr.kcal, 0);
+            
+            document.getElementById('kcalValue').innerText = Math.max(0, DAILY_GOAL - eaten);
+            document.getElementById('totalBurned').innerText = burned + " kcal yandı";
+
+            // Liste Render
+            renderList('food', 'foodList');
+            renderList('sport', 'sportList');
+
+            // Haftalık Ortalama Hesaplama (Zekice Kısım)
+            calculateWeekly();
+        }
+
+        function renderList(type, elementId) {
+            const div = document.getElementById(elementId);
+            const items = db.logs[currentDayKey][type];
+            div.innerHTML = items.length ? '' : '<p class="text-[10px] text-slate-300 italic text-center py-2">Henüz kayıt yok.</p>';
+            items.forEach(i => {
+                div.innerHTML += `
+                <div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-white">
+                    <span class="text-xs font-bold text-slate-700">${i.name} <span class="${type === 'food' ? 'text-emerald-500' : 'text-orange-500'} ml-1">${i.kcal} kcal</span></span>
+                    <button onclick="deleteEntry('${type}', ${i.id})" class="delete-btn">✕</button>
+                </div>`;
+            });
+        }
+
+        function calculateWeekly() {
+            let totalLast7Days = 0;
+            let daysCount = 0;
+            const keys = Object.keys(db.logs);
+            
+            // Son 7 güne ait dataları topla
+            keys.slice(-7).forEach(key => {
+                const dayEaten = db.logs[key].food.reduce((a, b) => a + b.kcal, 0);
+                if(dayEaten > 0) {
+                    totalLast7Days += dayEaten;
+                    daysCount++;
+                }
+            });
+
+            const avg = daysCount > 0 ? Math.round(totalLast7Days / daysCount) : 0;
+            document.getElementById('weeklyAvg').innerText = avg + " kcal";
+            
+            const barWidth = Math.min(100, (avg / 1800) * 100);
+            const barColor = avg > 1900 ? '#ef4444' : (avg < 1700 ? '#34d399' : '#10b981');
+            document.getElementById('weeklyBar').style.width = barWidth + "%";
+            document.getElementById('weeklyBar').style.backgroundColor = barColor;
+        }
+
+        function save() { localStorage.setItem('ali_tracker_db', JSON.stringify(db)); }
+        init();
+    </script>
+</body>
+</html>
